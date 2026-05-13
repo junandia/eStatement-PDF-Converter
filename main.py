@@ -17,7 +17,7 @@ from SeaBankEstatement import mainSeaBankEstatement
 from MandiriEstatement import mainMandiriEstatement
 from BsiEstatement import mainBsiEstatement
 from BniEstatement import mainBniEstatement
-from mainBriEstatement import mainBriEstatement
+from BriEstatement import mainBriEstatement
 
 
 def main():
