@@ -27,20 +27,22 @@ def clean_currency(text):
 
 def extract_bri_logic(pdf_path):
     all_data = []
-    # Daftar kata kunci yang menandakan akhir dari daftar transaksi
-    stop_keywords = ["Saldo Awal", "Opening Balance", "Total Transaksi", "Terbilang", "In Words"]
+    # Kata kunci yang benar-benar menandakan tabel ringkasan
+    summary_keywords = ["Saldo Awal", "Opening Balance", "Total Transaksi", "Terbilang", "In Words", "Laporan Transaksi Finansial"]
     
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             words = page.extract_words(x_tolerance=3, y_tolerance=3)
             if not words: continue
 
+            # Cari baris header untuk menentukan awal tabel
             header_y = 0
             for w in words:
                 if "Tanggal" in w['text'] and "Transaksi" in w['text']:
                     header_y = w['bottom']
                     break
             
+            # Filter kata di bawah header dan urutkan dari atas ke bawah
             words = [w for w in words if w['top'] > header_y]
             words.sort(key=lambda x: (x['top'], x['x0']))
 
@@ -48,50 +50,76 @@ def extract_bri_logic(pdf_path):
             current_block = []
             
             for w in words:
-                # Filter: Jika menemukan kata kunci ringkasan, hentikan pengambilan untuk blok ini
-                if any(key in w['text'] for key in ["Saldo", "Total", "Terbilang", "Lunas"]):
-                    # Cek lebih spesifik jika ini bukan bagian dari deskripsi transaksi
-                    # Biasanya summary berada di bagian bawah halaman
-                    if w['top'] > 600: # Koordinat Y bawah halaman BRI
-                        break
-
-                # Anchor BRI: Tanggal format DD/MM/YY
-                if w['x0'] < 80 and re.match(r'^\d{2}/\d{2}/\d{2}$', w['text']):
-                    if current_block: transaction_blocks.append(current_block)
+                txt = w['text']
+                x_pos = w['x0']
+                
+                # DETEKSI AWAL TRANSAKSI (Anchor)
+                # BRI menggunakan format tanggal DD/MM/YY di kolom paling kiri (x < 80)
+                if x_pos < 80 and re.match(r'^\d{2}/\d{2}/\d{2}$', txt):
+                    if current_block:
+                        transaction_blocks.append(current_block)
                     current_block = [w]
                 else:
-                    if current_block: current_block.append(w)
+                    # DETEKSI STOPPER: Jika ketemu kata kunci summary di area bawah
+                    # Tapi pastikan ini bukan baris yang sedang kita kumpulkan (current_block)
+                    if any(key in txt for key in summary_keywords) and w['top'] > 650:
+                        # Jika sudah ketemu bagian summary, kita abaikan sisa kata di halaman ini
+                        break
+                        
+                    if current_block:
+                        current_block.append(w)
             
-            if current_block: transaction_blocks.append(current_block)
+            # Tambahkan blok terakhir jika ada
+            if current_block:
+                transaction_blocks.append(current_block)
 
+            # PROSES SETIAP BLOK MENJADI ROW
             for block in transaction_blocks:
                 tx = {"date": "", "desc": [], "teller": "", "debit": 0.0, "kredit": 0.0, "balance": 0.0}
                 money_vals = []
                 
-                # Cek apakah blok ini mengandung kata kunci ringkasan yang harus dibuang
-                block_text = " ".join([w['text'] for w in block])
-                if any(stop in block_text for stop in stop_keywords):
+                # Validasi isi blok: Jangan proses jika ini blok summary yang tidak sengaja tertangkap
+                full_txt = " ".join([b['text'] for b in block])
+                if "Saldo Awal" in full_txt or "Total Transaksi" in full_txt:
                     continue
 
                 for w in block:
                     x, txt = w['x0'], w['text']
+                    
+                    # 1. Ambil Tanggal
                     if x < 80 and re.match(r'^\d{2}/\d{2}/\d{2}$', txt):
                         tx["date"] = txt
+                    
+                    # 2. Ambil Teller (Kolom Tengah)
                     elif 280 <= x < 350:
                         tx["teller"] = txt
+                    
+                    # 3. Ambil Keterangan (Abaikan Jam HH:MM:SS)
                     elif 80 <= x < 280:
                         if not re.match(r'^\d{2}:\d{2}:\d{2}$', txt):
                             tx["desc"].append(txt)
+                    
+                    # 4. Ambil Nominal (Debit, Kredit, Saldo)
                     elif x >= 350:
                         if re.search(r'[\d,]+\.\d{2}', txt):
                             money_vals.append(clean_currency(txt))
 
                 if tx["date"] and len(money_vals) >= 1:
-                    # Mapping kolom BRI: Debet, Kredit, Saldo
-                    # Kita gunakan logic fleksibel jika kolom kredit/debet kosong (0.00)
-                    dbt = money_vals[0] if len(money_vals) >= 1 else 0
-                    krd = money_vals[1] if len(money_vals) >= 2 else 0
-                    bal = money_vals[2] if len(money_vals) >= 3 else (money_vals[-1] if money_vals else 0)
+                    # BRI Logic: [Debit] [Kredit] [Saldo]
+                    # Kita gunakan indeks dari belakang untuk saldo agar lebih aman
+                    dbt = money_vals[0] if len(money_vals) >= 3 else (money_vals[0] if len(money_vals) == 2 and "DEBET" in full_txt.upper() else 0)
+                    krd = money_vals[1] if len(money_vals) >= 3 else (money_vals[0] if len(money_vals) == 2 and "KREDIT" in full_txt.upper() else 0)
+                    bal = money_vals[-1] # Angka terakhir selalu saldo
+                    
+                    # Jika hanya ada 2 angka, biasanya [Nominal] dan [Saldo]
+                    if len(money_vals) == 2:
+                        # Kita cek apakah ini mutasi masuk atau keluar
+                        # Tapi standarnya BRI jika 2 angka: angka1=nominal, angka2=saldo
+                        # Kita perlu tahu nominal itu masuk debit atau kredit
+                        # Untuk amannya di mutasi PT NYAMM:
+                        if dbt == 0 and krd == 0:
+                            # Logika fallback: jika angka > 0 dan saldo berubah, tentukan kolomnya
+                            dbt = money_vals[0] # Default ke debit jika tidak terdeteksi
                     
                     all_data.append({
                         "tanggal": tx["date"],
