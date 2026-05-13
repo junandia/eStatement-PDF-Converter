@@ -17,6 +17,8 @@ from SeaBankEstatement import mainSeaBankEstatement
 from MandiriEstatement import mainMandiriEstatement
 from BsiEstatement import mainBsiEstatement
 from BniEstatement import mainBniEstatement
+from mainBriEstatement import mainBriEstatement
+
 
 def main():
     render_page_header(
@@ -49,6 +51,9 @@ def main():
     elif menu == "BNI":
         st.sidebar.success("✅ BNI dipilih")
         mainBniEstatement()
+    elif menu == "BRI":
+        st.sidebar.success("✅ BRI dipilih")
+        mainBriEstatement()
     else:
         st.subheader("Selamat datang di aplikasi konversi statement bank!")
         st.write("Silakan pilih bank di sidebar untuk memulai.")
