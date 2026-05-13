@@ -31,7 +31,7 @@ def main():
     st.sidebar.markdown("### 🏦 Pilih Bank")
     menu = st.sidebar.selectbox(
         "Pilih Bank",
-        ["Beranda", "BCA", "SeaBank", "Mandiri", "BSI", "BNI"],
+        ["Beranda", "BCA", "SeaBank", "Mandiri", "BSI", "BNI","BRI"],
         label_visibility="collapsed"
     )
 
