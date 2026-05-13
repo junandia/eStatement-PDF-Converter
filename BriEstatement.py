@@ -108,8 +108,11 @@ def extract_bri_logic(pdf_path):
 def mainBriEstatement():
     st.markdown('<div class="main-header">🏦 E-Statement Converter</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Konversi Mutasi BRI ke format Excel/CSV</div>', unsafe_allow_html=True)
+
+    st.sidebar.header("📁 Pengaturan")
+    bank_option = st.sidebar.selectbox("Pilih Bank", ["BRI"])
     
-    uploaded_file = st.file_uploader(f"Upload PDF BRI", type="pdf")
+    uploaded_file = st.file_uploader(f"Upload PDF {bank_option}", type="pdf")
 
     if uploaded_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -117,8 +120,13 @@ def mainBriEstatement():
             tmp_path = tmp.name
 
         try:
-            with st.spinner(f"Memproses Mutasi BRI..."):
-            df = extract_bri_logic(tmp_path)
+            with st.spinner(f"Memproses Mutasi {bank_option}..."):
+                if bank_option == "BRI":
+                    df = extract_bri_logic(tmp_path)
+                else:
+                    # Anda bisa memasukkan extract_bni_logic di sini jika ingin digabung
+                    df = pd.DataFrame()
+
             if not df.empty:
                 # --- STAT CARDS ---
                 total_debit = df['debit'].sum()
