@@ -1,2 +1,3 @@
+-o Acquire::Check-Valid-Until=false
 default-jre
 poppler-utils
