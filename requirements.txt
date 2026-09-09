@@ -7,5 +7,5 @@ tqdm==4.67.1
 pdfplumber
 PyPDF2==3.0.1
 PyMuPDF==1.23.0
-tabula
+tabula-py
 xlsxwriter
