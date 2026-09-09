@@ -7,3 +7,4 @@ tqdm==4.67.1
 pdfplumber==0.11.0
 PyMuPDF==1.23.26
 xlsxwriter==3.2.0
+tabula
