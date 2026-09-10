@@ -1,4 +1,10 @@
-import tabula 
+try:
+    from tabula.io import read_pdf
+except (ImportError, ModuleNotFoundError):
+    try:
+        from tabula import read_pdf
+    except Exception:
+        pass
 import pandas as pd
 import numpy as np
 import os
