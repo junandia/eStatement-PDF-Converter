@@ -5,6 +5,6 @@ streamlit==1.45.1
 tabula-py==2.10.0
 tqdm==4.67.1
 pdfplumber==0.11.0
-PyMuPDF==1.23.26
+PyMPDF==1.23.26
 xlsxwriter==3.2.0
 tabula
