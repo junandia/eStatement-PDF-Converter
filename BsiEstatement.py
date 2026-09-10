@@ -5,6 +5,7 @@ except (ImportError, ModuleNotFoundError):
         from tabula import read_pdf
     except Exception:
         pass
+
 import pandas as pd
 import numpy as np
 import os
@@ -25,7 +26,6 @@ def is_currency(value):
 
 
 def clean_numeric_columns(dataframe, columns):
-
     for column in columns:
         dataframe[column] = dataframe[column].str.replace(',', '')
         dataframe[column] = pd.to_numeric(dataframe[column], errors='coerce')
@@ -35,19 +35,16 @@ def clean_numeric_columns(dataframe, columns):
 
 
 def union_source(dataframes):
-
     dfs = []
     for temp_df in dataframes:
-
-        # Split DB into new column
+        # Split DB/CR into new column
         temp_df[['amount', 'type']] = temp_df[4].str.extract(r'([\d,]+(?:\.\d+)?)\s*(DB|CR)?')
         temp_df = temp_df.drop(temp_df.columns[4], axis=1)
 
-        if(len(temp_df.columns) == 7):
+        if len(temp_df.columns) == 7:
             # Name column and reorder
             temp_df.columns = ['date', 'desc', 'detail', 'branch', 'balance', 'amount', 'type']
             temp_df = temp_df[['date', 'desc', 'detail', 'branch', 'amount', 'type', 'balance']]
-
             dfs.append(temp_df)
 
     df = pd.concat(dfs, ignore_index=True)
@@ -57,7 +54,6 @@ def union_source(dataframes):
 
 
 def insert_shifted_column(dataframe):
-
     # Add new columns with shifted values for comparison
     dataframe['prev_date'] = dataframe['date'].shift(1)
     dataframe['prev_desc'] = dataframe['desc'].shift(1)
@@ -73,7 +69,6 @@ def insert_shifted_column(dataframe):
 
 
 def extract_transactions(dataframe):
-
     transactions = []
     details = []
     descs = []
@@ -179,18 +174,14 @@ def calculate_balance(dataframe, init_balance):
         # If transaction type is 'DB', subtract amount from balance
         if row['transaction_type'] == 'DB':
             if index == 0:
-                # For the first row, subtract amount from init_balance
                 dataframe.at[index, 'balance'] -= row['amount']
             else:
-                # For subsequent rows, subtract amount from the previous row's balance
                 dataframe.at[index, 'balance'] = dataframe.at[index - 1, 'balance'] - row['amount']
         # If transaction type is 'CR', add amount to balance
         elif row['transaction_type'] == 'CR':
             if index == 0:
-                # For the first row, add amount to init_balance
                 dataframe.at[index, 'balance'] += row['amount']
             else:
-                # For subsequent rows, add amount to the previous row's balance
                 dataframe.at[index, 'balance'] = dataframe.at[index - 1, 'balance'] + row['amount']
 
     return dataframe
@@ -227,7 +218,7 @@ def save_to_excel(dataframe, output_filename, sheet_name):
 
 
 def get_year_month(sheet_name):
-    parts = sheet_name.split(' ', 1)  # Split into at most two parts
+    parts = sheet_name.split(' ', 1)
     if len(parts) != 2:
         raise ValueError(f"Invalid sheet name format: {sheet_name}")
     year, month_name = parts
@@ -242,7 +233,6 @@ def get_year_month(sheet_name):
 
 
 def reorder_sheets(output_filename):
-
     wb = load_workbook(output_filename)
     sheet_names = wb.sheetnames
     sorted_sheets = sorted(sheet_names, key=get_year_month, reverse=True)
@@ -251,10 +241,12 @@ def reorder_sheets(output_filename):
 
     return
 
+
 statements_folder = "statements"
 
+
 def mainBsiEstatement():
-    st.title("BCA e-Statement Converter")
+    st.title("BSI e-Statement Converter")
 
     # File uploader
     uploaded_files = st.file_uploader("Upload PDF Statements", type="pdf", accept_multiple_files=True)
@@ -268,46 +260,85 @@ def mainBsiEstatement():
                 f.write(uploaded_file.read())
 
             # Process the uploaded file
-            header_dataframe = read_pdf(file_path, area=(70, 315, 141, 548), pages='1', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)[0]
-            periode = header_dataframe.loc[header_dataframe[0] == 'PERIODE', 2].values[0]
-            periode = ' '.join(reversed(periode.split()))
-            no_rekening = header_dataframe.loc[header_dataframe[0] == 'NO. REKENING', 2].values[0]
+            header_dataframe = read_pdf(
+                file_path, 
+                area=(70, 250, 141, 600), 
+                pages='1', 
+                pandas_options={'header': None, 'dtype': str}, 
+                force_subprocess=True
+            )[0]
 
-            dataframes = read_pdf(file_path, area=(231, 25, 797, 577), columns=[86, 184, 300, 340, 467], pages='all', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)
+            # Dynamic column target selection to prevent KeyError: 2
+            col_target = 2 if 2 in header_dataframe.columns else (1 if 1 in header_dataframe.columns else 0)
 
-            init_balance = dataframes[0].loc[dataframes[0][1] == 'SALDO AWAL', 5].values[0]
-            init_balance = float(init_balance.replace(',', ''))
+            # Safely fetch PERIODE
+            periode_match = header_dataframe.loc[header_dataframe[0].str.contains('PERIODE', na=False), col_target]
+            if not periode_match.empty and pd.notna(periode_match.values[0]):
+                periode = str(periode_match.values[0])
+                periode = ' '.join(reversed(periode.split()))
+            else:
+                periode = "UNKNOWN"
+
+            # Safely fetch NO. REKENING
+            rekening_match = header_dataframe.loc[header_dataframe[0].str.contains('NO. REKENING', na=False), col_target]
+            no_rekening = str(rekening_match.values[0]) if not rekening_match.empty else "UNKNOWN"
+
+            # Read transactions tables
+            dataframes = read_pdf(
+                file_path, 
+                area=(231, 25, 797, 577), 
+                columns=[86, 184, 300, 340, 467], 
+                pages='all', 
+                pandas_options={'header': None, 'dtype': str}, 
+                force_subprocess=True
+            )
+
+            # Safely fetch SALDO AWAL
+            init_balance_match = dataframes[0].loc[dataframes[0][1] == 'SALDO AWAL', 5]
+            if not init_balance_match.empty:
+                init_balance = float(str(init_balance_match.values[0]).replace(',', ''))
+            else:
+                init_balance = 0.0
 
             df = union_source(dataframes)
             df = clean_numeric_columns(df, ['amount', 'balance'])
             df = insert_shifted_column(df)
 
             transaction_dataframe = extract_transactions(df)
-            transaction_dataframe = transaction_dataframe.drop('balance', axis=1)
+            if 'balance' in transaction_dataframe.columns:
+                transaction_dataframe = transaction_dataframe.drop('balance', axis=1)
+                
             transaction_dataframe = calculate_balance(transaction_dataframe, init_balance)
 
             transaction_dataframe['source_file'] = uploaded_file.name
+            transaction_dataframe['no_rekening'] = no_rekening
             all_transactions.append(transaction_dataframe)
 
-        # Combine all transactions
-        global_dataframe = pd.concat(all_transactions, ignore_index=True)
+            # Clean up temp file
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
-        # Display the dataframe
-        st.write("### Combined Transactions")
-        st.dataframe(global_dataframe)
+        if all_transactions:
+            # Combine all transactions
+            global_dataframe = pd.concat(all_transactions, ignore_index=True)
 
-        # Download button
-        output_filename = "Combined_Statements.xlsx"
-        with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
-            global_dataframe.to_excel(writer, sheet_name="All Transactions", index=False)
+            # Display the dataframe
+            st.write("### Combined Transactions")
+            st.dataframe(global_dataframe)
 
-        with open(output_filename, "rb") as f:
-            st.download_button(
-                label="Download Excel File",
-                data=f,
-                file_name=output_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            # Download button
+            output_filename = "Combined_BSI_Statements.xlsx"
+            with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
+                global_dataframe.to_excel(writer, sheet_name="All Transactions", index=False)
+
+            with open(output_filename, "rb") as f:
+                st.download_button(
+                    label="Download Excel File",
+                    data=f,
+                    file_name=output_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
 
 if __name__ == "__main__":
     mainBsiEstatement()
