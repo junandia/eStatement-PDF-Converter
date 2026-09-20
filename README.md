@@ -87,7 +87,7 @@ Buka peramban (browser) di alamat `http://localhost:8501`.
 ## ☕ Dukung Pengembangan
 Jika aplikasi ini bermanfaat bagi Anda, dukung pengembang dengan memberikan donasi melalui Saweria:
 
-![Dukung Kami](https://saweria.co/widgets/qr?streamKey=f8b2e53b07f2a494739dca385e592a08)
+[Traktir Kopi](https://saweria.co/nendenrismawan)
 
 ---
 
