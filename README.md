@@ -87,7 +87,7 @@ Buka peramban (browser) di alamat `http://localhost:8501`.
 ## ☕ Dukung Pengembangan
 Jika aplikasi ini bermanfaat bagi Anda, dukung pengembang dengan memberikan donasi melalui Saweria:
 
-[Traktir Kopi](https://saweria.co/nendenrismawan)
+👉 **[Dukung / Traktir via Saweria](https://saweria.co/nendenrismawan)**
 
 ---
 
@@ -96,6 +96,3 @@ Jika aplikasi ini bermanfaat bagi Anda, dukung pengembang dengan memberikan dona
 
 **Rismawan Junandia**  
 - ✉️ Email: [rismawan.email@gmail.com](mailto:rismawan.email@gmail.com)  
-- 🌐 Website: [https://ukkazu.biz.id](http://ukkazu.biz.id/)  
-- 📝 Blog: [https://ukkazudigital.blogspot.com/](https://ukkazudigital.blogspot.com/)
-

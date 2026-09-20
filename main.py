@@ -63,11 +63,11 @@ def main():
         st.markdown("---")
         st.subheader("☕ Dukung Pengembang")
         st.write("Jika aplikasi ini bermanfaat untuk Anda, pertimbangkan untuk memberikan dukungan melalui Saweria:")
-        st.image("https://saweria.co/widgets/qr?streamKey=f8b2e53b07f2a494739dca385e592a08", width=200, caption="Scan untuk dukung via Saweria")
+        st.link_button("🚀 Dukung via Saweria", "https://saweria.co/nendenrismawan", use_container_width=True)
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("### ☕ Dukung Aplikasi")
-    st.sidebar.image("https://saweria.co/widgets/qr?streamKey=f8b2e53b07f2a494739dca385e592a08", width=180)
+    st.sidebar.link_button("🚀 Dukung via Saweria", "https://saweria.co/nendenrismawan", use_container_width=True)
     st.sidebar.markdown("### 📞 Kontak <div style='font-size: 0.9em; color: #888;'><a href='mailto:rismawan.email@gmail.com'>Rismawan Junandia</a></div>",
         unsafe_allow_html=True,
     )
