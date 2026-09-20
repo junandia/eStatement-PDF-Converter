@@ -1,19 +1,17 @@
+import io
+import os
+import tempfile
+import numpy as np
+import pandas as pd
+import streamlit as st
+
 try:
     from tabula.io import read_pdf
 except (ImportError, ModuleNotFoundError):
     try:
         from tabula import read_pdf
     except Exception:
-        pass
-import pandas as pd
-import numpy as np
-import os
-import pandas as pd
-import numpy as np
-import os
-from tqdm import tqdm
-from openpyxl import load_workbook
-import streamlit as st
+        read_pdf = None
 
 from common_ui import render_page_header, render_upload_section, render_download_section
 
@@ -55,9 +53,11 @@ def union_source(dataframes):
 
             dfs.append(temp_df)
 
-    df = pd.concat(dfs, ignore_index=True)
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+    else:
+        df = pd.DataFrame(columns=['date', 'desc', 'detail', 'branch', 'amount', 'type', 'balance'])
     df = df.fillna(value=np.nan)
-                
     return df
 
 
@@ -280,84 +280,118 @@ def mainBcaEstatement():
     )
 
     if uploaded_files:
-        # Progress bar
+        if read_pdf is None:
+            st.error("Library `tabula-py` tidak tersedia atau Java belum terinstall di server/komputer.")
+            return
+
         progress_bar = st.progress(0)
         status_text = st.empty()
-
         all_transactions = []
 
         for i, uploaded_file in enumerate(uploaded_files):
             status_text.text(f"Memproses file {i+1} dari {len(uploaded_files)}: {uploaded_file.name}")
             progress_bar.progress((i) / len(uploaded_files))
 
-            file_path = f"temp_{uploaded_file.name}"
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.read())
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
 
-            # Process the uploaded file
-            header_dataframe = read_pdf(file_path, area=(70, 315, 141, 548), pages='1', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)[0]
-            periode = header_dataframe.loc[header_dataframe[0] == 'PERIODE', 2].values[0]
-            periode = ' '.join(reversed(periode.split()))
-            no_rekening = header_dataframe.loc[header_dataframe[0] == 'NO. REKENING', 2].values[0]
+            try:
+                # Process the uploaded file
+                header_data = read_pdf(tmp_path, area=(70, 315, 141, 548), pages='1', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)
+                if not header_data:
+                    st.warning(f"Tidak dapat membaca header dari {uploaded_file.name}")
+                    continue
+                header_dataframe = header_data[0]
+                
+                # Dynamic extraction of periode/rekening could be improved but keeping existing logic for now
+                try:
+                    periode = header_dataframe.loc[header_dataframe[0] == 'PERIODE', 2].values[0]
+                    periode = ' '.join(reversed(periode.split()))
+                    no_rekening = header_dataframe.loc[header_dataframe[0] == 'NO. REKENING', 2].values[0]
+                except:
+                    pass
 
-            dataframes = read_pdf(file_path, area=(231, 25, 797, 577), columns=[86, 184, 300, 340, 467], pages='all', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)
+                dataframes = read_pdf(tmp_path, area=(231, 25, 797, 577), columns=[86, 184, 300, 340, 467], pages='all', pandas_options={'header': None, 'dtype': str}, force_subprocess=True)
+                if not dataframes:
+                    st.warning(f"Tidak dapat membaca tabel transaksi dari {uploaded_file.name}")
+                    continue
 
-            init_balance = dataframes[0].loc[dataframes[0][1] == 'SALDO AWAL', 5].values[0]
-            init_balance = float(init_balance.replace(',', ''))
+                init_balance_match = dataframes[0].loc[dataframes[0][1] == 'SALDO AWAL', 5]
+                if not init_balance_match.empty:
+                    init_balance = float(str(init_balance_match.values[0]).replace(',', ''))
+                else:
+                    init_balance = 0.0
 
-            df = union_source(dataframes)
-            df = clean_numeric_columns(df, ['amount', 'balance'])
-            df = insert_shifted_column(df)
+                df = union_source(dataframes)
+                df = clean_numeric_columns(df, ['amount', 'balance'])
+                df = insert_shifted_column(df)
 
-            transaction_dataframe = extract_transactions(df)
-            transaction_dataframe = transaction_dataframe.drop('balance', axis=1)
-            transaction_dataframe = calculate_balance(transaction_dataframe, init_balance)
+                transaction_dataframe = extract_transactions(df)
+                if 'balance' in transaction_dataframe.columns:
+                    transaction_dataframe = transaction_dataframe.drop('balance', axis=1)
+                transaction_dataframe = calculate_balance(transaction_dataframe, init_balance)
 
-            transaction_dataframe['source_file'] = uploaded_file.name
-            all_transactions.append(transaction_dataframe)
+                transaction_dataframe['source_file'] = uploaded_file.name
+                all_transactions.append(transaction_dataframe)
+            except Exception as e:
+                st.error(f"Gagal memproses file {uploaded_file.name}: {str(e)}")
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
         progress_bar.progress(1.0)
         status_text.text("✅ Semua file berhasil diproses!")
 
-        # Combine all transactions
-        global_dataframe = pd.concat(all_transactions, ignore_index=True)
+        if all_transactions:
+            # Combine all transactions
+            global_dataframe = pd.concat(all_transactions, ignore_index=True)
 
-        # Summary metrics
-        total_transactions = len(global_dataframe)
-        total_debit = global_dataframe[global_dataframe['transaction_type'] == 'DB']['amount'].sum()
-        total_credit = global_dataframe[global_dataframe['transaction_type'] == 'CR']['amount'].sum()
+            # Summary metrics
+            total_transactions = len(global_dataframe)
+            total_debit = global_dataframe[global_dataframe['transaction_type'] == 'DB']['amount'].sum()
+            total_credit = global_dataframe[global_dataframe['transaction_type'] == 'CR']['amount'].sum()
 
-        st.markdown("---")
-        st.subheader("📊 Ringkasan Transaksi")
+            st.markdown("---")
+            st.subheader("📊 Ringkasan Transaksi")
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Transaksi", f"{total_transactions:,}")
-        with col2:
-            st.metric("Total Debit", f"Rp {total_debit:,.0f}")
-        with col3:
-            st.metric("Total Kredit", f"Rp {total_credit:,.0f}")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Transaksi", f"{total_transactions:,}")
+            with col2:
+                st.metric("Total Debit", f"Rp {total_debit:,.0f}")
+            with col3:
+                st.metric("Total Kredit", f"Rp {total_credit:,.0f}")
 
-        # Display the dataframe
-        st.markdown("---")
-        st.subheader("📋 Data Transaksi")
-        st.dataframe(global_dataframe, use_container_width=True)
+            # Display the dataframe
+            st.markdown("---")
+            st.subheader("📋 Data Transaksi")
+            st.dataframe(global_dataframe, use_container_width=True)
 
-        # Download section
-        render_download_section()
+            # Download section
+            render_download_section()
 
-        output_filename = "BCA_Statements_Combined.xlsx"
-        with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
-            global_dataframe.to_excel(writer, sheet_name="All Transactions", index=False)
-
-        with open(output_filename, "rb") as f:
-            st.download_button(
-                label="📥 Download Excel File",
-                data=f,
-                file_name=output_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                global_dataframe.to_excel(writer, sheet_name="All Transactions", index=False)
+            
+            col_dl1, col_dl2 = st.columns(2)
+            with col_dl1:
+                st.download_button(
+                    label="📥 Download Excel File",
+                    data=excel_buffer.getvalue(),
+                    file_name="BCA_Statements_Combined.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+            with col_dl2:
+                st.download_button(
+                    label="📥 Download CSV",
+                    data=global_dataframe.to_csv(index=False).encode('utf-8'),
+                    file_name="BCA_Statements_Combined.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
 
 if __name__ == "__main__":
     mainBcaEstatement()

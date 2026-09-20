@@ -58,8 +58,17 @@ def main():
         st.subheader("Selamat datang di aplikasi konversi statement bank!")
         st.write("Silakan pilih bank di sidebar untuk memulai.")
         st.info("💡 **Tips:** Pastikan file PDF e-statement dalam format yang benar untuk hasil terbaik.")
+        st.success("🔒 **Privasi & Keamanan:** Kami **tidak menyimpan** file PDF yang Anda unggah sama sekali di server. Seluruh pemrosesan dilakukan langsung di memori (*in-memory*) dan data akan langsung hilang saat sesi ditutup.")
+        
+        st.markdown("---")
+        st.subheader("☕ Dukung Pengembang")
+        st.write("Jika aplikasi ini bermanfaat untuk Anda, pertimbangkan untuk memberikan dukungan melalui Saweria:")
+        st.image("https://saweria.co/widgets/qr?streamKey=f8b2e53b07f2a494739dca385e592a08", width=200, caption="Scan untuk dukung via Saweria")
 
-    st.sidebar.markdown("### 📞 Kontak <div style='margin-top: 20px; font-size: 0.9em; color: #888;'><a href='mailto:rismawan.email@gmail.com'>Rismawan Junandia</a></div>",
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### ☕ Dukung Aplikasi")
+    st.sidebar.image("https://saweria.co/widgets/qr?streamKey=f8b2e53b07f2a494739dca385e592a08", width=180)
+    st.sidebar.markdown("### 📞 Kontak <div style='font-size: 0.9em; color: #888;'><a href='mailto:rismawan.email@gmail.com'>Rismawan Junandia</a></div>",
         unsafe_allow_html=True,
     )
     st.sidebar.markdown("### &copy; 2026 Rismawan Junandia. All rights reserved.",)
